@@ -103,3 +103,14 @@ def process_phone_numbers(raw_values: List[Any]) -> ExtractionResult:
             result.unknown_numbers.append(cleaned if cleaned else raw_str)
 
     return result
+
+def chunk_recipients(recipients: List[str], batch_size: int) -> List[List[str]]:
+    """
+    Splits a list of recipient phone numbers into batches of size `batch_size`.
+    If batch_size <= 0 or greater than the recipient count, returns a single batch.
+    """
+    if not recipients:
+        return []
+    if batch_size <= 0 or batch_size >= len(recipients):
+        return [recipients]
+    return [recipients[i:i + batch_size] for i in range(0, len(recipients), batch_size)]
