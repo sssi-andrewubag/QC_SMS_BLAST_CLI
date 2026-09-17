@@ -1,5 +1,5 @@
 import sys
-from typing import Dict, Any
+from typing import Dict, Any, List, Optional
 from phone_utils import ExtractionResult
 
 try:
@@ -26,35 +26,35 @@ BOLD = '\033[1m'
 def print_banner():
     if USE_RICH:
         console.print(Panel(
-            "[bold cyan]Sandman SMS BLAST v3[/bold cyan]\n[bold yellow]# Coded By Andrew Ubag - Refactored v3[/bold yellow]",
+            "[bold cyan]Sandman SMS BLAST v4[/bold cyan]\n[bold yellow]# Coded By Andrew Ubag - Automated Batching v4[/bold yellow]",
             title="[bold green]QC SMS BLASTER[/bold green]",
             border_style="cyan",
             expand=False
         ))
     else:
-        print(f"{C}{BOLD}====================================================\n               {G}Sandman SMS BLAST v3{C}\n       {Y}# Coded By Andrew Ubag - Refactored v3{C}\n===================================================={W}")
+        print(f"{C}{BOLD}====================================================\n               {G}Sandman SMS BLAST v4{C}\n       {Y}# Coded By Andrew Ubag - Automated Batching v4{C}\n===================================================={W}")
 
 def print_test_banner():
     if USE_RICH:
         console.print(Panel(
-            "[bold yellow]*** NO LIVE PRODUCTION SMS WILL BE SENT ***[/bold yellow]\n[bold cyan]# Sandman SMS BLAST v3 - TEST MODE[/bold cyan]",
+            "[bold yellow]*** NO LIVE PRODUCTION SMS WILL BE SENT ***[/bold yellow]\n[bold cyan]# Sandman SMS BLAST v4 - TEST MODE[/bold cyan]",
             title="[bold yellow]TEST MODE ONLY[/bold yellow]",
             border_style="yellow",
             expand=False
         ))
     else:
-        print(f"{Y}{BOLD}====================================================\n                [ TEST MODE ONLY ]\n   *** NO LIVE PRODUCTION SMS WILL BE SENT ***\n===================================================={W}\n{C}{BOLD}                # Sandman SMS BLAST v3 - TEST MODE{W}")
+        print(f"{Y}{BOLD}====================================================\n                [ TEST MODE ONLY ]\n   *** NO LIVE PRODUCTION SMS WILL BE SENT ***\n===================================================={W}\n{C}{BOLD}                # Sandman SMS BLAST v4 - TEST MODE{W}")
 
 def print_prod_banner():
     if USE_RICH:
         console.print(Panel(
-            "[bold red]*** LIVE SMS WILL BE SENT TO REAL RECEIVERS ***[/bold red]\n[bold red]# Sandman SMS BLAST v3 - PRODUCTION MODE[/bold red]",
+            "[bold red]*** LIVE SMS WILL BE SENT TO REAL RECEIVERS ***[/bold red]\n[bold red]# Sandman SMS BLAST v4 - PRODUCTION MODE[/bold red]",
             title="[bold red]PRODUCTION MODE ACTIVE[/bold red]",
             border_style="red",
             expand=False
         ))
     else:
-        print(f"{R}{BOLD}====================================================\n             [ PRODUCTION MODE ACTIVE ]\n   *** LIVE SMS WILL BE SENT TO REAL RECEIVERS ***\n===================================================={W}\n{R}{BOLD}             # Sandman SMS BLAST v3 - PRODUCTION MODE{W}")
+        print(f"{R}{BOLD}====================================================\n             [ PRODUCTION MODE ACTIVE ]\n   *** LIVE SMS WILL BE SENT TO REAL RECEIVERS ***\n===================================================={W}\n{R}{BOLD}             # Sandman SMS BLAST v4 - PRODUCTION MODE{W}")
 
 def print_extraction_summary(result: ExtractionResult, default_count: int = 0):
     if USE_RICH:
@@ -118,3 +118,70 @@ def print_sql_hint(limit: str):
         print(f"{G}[~] You should check the LOGs using this query:{W}")
         print(f"{Y}{sql}{W}")
         print(f"{C}[~] PROD qceservices | DATABASE qceservices{W}")
+
+def print_batch_plan(batch_size: int, total_batches: int, total_recipients: int, delay_seconds: float):
+    if USE_RICH:
+        table = Table(title="Batch Execution Plan", border_style="cyan", header_style="bold magenta")
+        table.add_column("Parameter", style="bold white")
+        table.add_column("Value", justify="right")
+        table.add_row("Total Recipients", f"[bold green]{total_recipients}[/bold green]")
+        table.add_row("Batch Size", f"[bold cyan]{batch_size}[/bold cyan]")
+        table.add_row("Total Batches", f"[bold yellow]{total_batches}[/bold yellow]")
+        table.add_row("Inter-Batch Delay", f"{delay_seconds:.1f}s")
+        console.print(table)
+        console.print()
+    else:
+        print(f"{C}{BOLD}--- BATCH EXECUTION PLAN ---{W}")
+        print(f"  Total Recipients:  {G}{BOLD}{total_recipients}{W}")
+        print(f"  Batch Size:        {C}{BOLD}{batch_size}{W}")
+        print(f"  Total Batches:     {Y}{BOLD}{total_batches}{W}")
+        print(f"  Inter-Batch Delay: {W}{delay_seconds:.1f}s")
+        print(f"{C}{BOLD}----------------------------{W}\n")
+
+def print_batch_progress(batch_num: int, total_batches: int, batch_count: int, start_idx: int, end_idx: int, total_recipients: int):
+    if USE_RICH:
+        console.print(f"[bold cyan]>>> [Batch {batch_num}/{total_batches}][/bold cyan] Sending [bold green]{batch_count}[/bold green] recipient(s) (indices [yellow]{start_idx}-{end_idx}[/yellow] of [bold white]{total_recipients}[/bold white])...")
+    else:
+        print(f"{C}{BOLD}>>> [Batch {batch_num}/{total_batches}]{W} Sending {G}{BOLD}{batch_count}{W} recipient(s) (indices {Y}{start_idx}-{end_idx}{W} of {total_recipients})...")
+
+def print_batch_total_summary(
+    total_batches: int,
+    successful_batches: int,
+    failed_batches: int,
+    total_recipients_sent: int,
+    total_recipients_target: int,
+    failed_batches_info: Optional[List[Dict[str, Any]]] = None
+):
+    if USE_RICH:
+        table = Table(title="Batch Execution Summary", border_style="green" if failed_batches == 0 else "red", header_style="bold magenta")
+        table.add_column("Metric", style="bold white")
+        table.add_column("Result", justify="right")
+        
+        status_text = "[bold green]ALL BATCHES SENT SUCCESSFULLY[/bold green]" if failed_batches == 0 else "[bold red]COMPLETED WITH ERRORS[/bold red]"
+        table.add_row("Overall Status", status_text)
+        table.add_row("Total Batches Processed", f"{total_batches}")
+        table.add_row("Successful Batches", f"[bold green]{successful_batches}[/bold green]")
+        table.add_row("Failed Batches", f"[bold red]{failed_batches}[/bold red]" if failed_batches > 0 else f"[green]0[/green]")
+        table.add_row("Total SMS Sent", f"[bold green]{total_recipients_sent}[/bold green] / {total_recipients_target}")
+        
+        console.print(table)
+        if failed_batches_info:
+            console.print(f"[bold red]Failed Batches Detail:[/bold red]")
+            for item in failed_batches_info:
+                console.print(f"  [red]• Batch {item.get('batch_num')}: {item.get('error')}[/red]")
+        console.print()
+    else:
+        print(f"\n{C}{BOLD}====================================================\n             BATCH EXECUTION SUMMARY\n===================================================={W}")
+        if failed_batches == 0:
+            print(f"  Overall Status:        {G}{BOLD}ALL BATCHES SENT SUCCESSFULLY{W}")
+        else:
+            print(f"  Overall Status:        {R}{BOLD}COMPLETED WITH ERRORS{W}")
+        print(f"  Total Batches:         {total_batches}")
+        print(f"  Successful Batches:    {G}{successful_batches}{W}")
+        print(f"  Failed Batches:        {R if failed_batches > 0 else G}{failed_batches}{W}")
+        print(f"  Total SMS Sent:        {G}{BOLD}{total_recipients_sent}{W} / {total_recipients_target}")
+        if failed_batches_info:
+            print(f"  {R}Failed Batches Detail:{W}")
+            for item in failed_batches_info:
+                print(f"    {R}• Batch {item.get('batch_num')}: {item.get('error')}{W}")
+        print(f"{C}{BOLD}===================================================={W}\n")
