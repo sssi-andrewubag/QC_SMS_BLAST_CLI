@@ -1,0 +1,13 @@
+
+select count(*),b.eperiod 
+from sms_responses_logs a 
+inner join sms_apicall_logs b 
+on a.log_id = b.log_id
+where  a.responsecode = 201 and b.logtypeno = 2
+and b.eyear = 2025 and b.eperiod = 10 and a.responsestring like '%"numberOfMessagesInThisBatch":6%' and date(a.etimestamp) like '%2025-10-24%'
+group by b.eperiod
+
+variables:
+eperiod - currentmonth
+timestamp - currenttimestamp
+batch - last entry
