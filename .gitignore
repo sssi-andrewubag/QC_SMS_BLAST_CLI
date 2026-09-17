@@ -1,0 +1,16 @@
+# Data & Message files
+msg.txt
+1.xlsx
+*.xlsx
+
+# Python cache & bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Test scripts
+test_*.py
+
+# Temporary / Lock files (e.g. LibreOffice, Excel)
+.~lock.*.*
+.~lock.*
