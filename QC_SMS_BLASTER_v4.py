@@ -25,7 +25,7 @@ from ui_reporter import (
     print_batch_plan,
     print_batch_progress,
     print_batch_total_summary,
-    G, Y, R, W, B, C, M, BOLD
+    G, Y, R, W, B, C, M, BOLD, ORANGE, O
 )
 
 # Default Test Receivers fallback if in TEST mode
