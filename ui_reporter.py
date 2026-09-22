@@ -1,13 +1,27 @@
 import sys
-from typing import Dict, Any, List, Optional
+import json
+import re
+from typing import Dict, Any, List, Optional, Tuple
 from phone_utils import ExtractionResult
 
+# Configure UTF-8 console output encoding to prevent Windows cp1252 charmap encoding errors
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+if hasattr(sys.stderr, "reconfigure"):
+    try:
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 try:
-    from rich.console import Console
-    from rich.panel import Panel
-    from rich.table import Table
-    from rich.prompt import Prompt
-    from rich.text import Text
+    from rich.console import Console  # type: ignore
+    from rich.panel import Panel      # type: ignore
+    from rich.table import Table      # type: ignore
+    from rich.prompt import Prompt    # type: ignore
+    from rich.text import Text        # type: ignore
     USE_RICH = True
     console = Console()
 except ImportError:
@@ -22,6 +36,22 @@ M = '\033[95m'
 R = '\033[91m'
 W = '\033[0m'
 BOLD = '\033[1m'
+ORANGE = '\033[38;5;208m'
+O = ORANGE
+
+# Regex patterns for Unicode escape sequences and emoji detection
+UNICODE_ESCAPE_PATTERN = r'\\+[uU](?:[0-9a-fA-F]{4}|[0-9a-fA-F]{8})'
+EMOJI_PATTERN = (
+    r'[\U0001F600-\U0001FAFF]'
+    r'|[\U0001F1E6-\U0001F1FF]'
+    r'|[\u2600-\u26FF]'
+    r'|[\u2700-\u27BF]'
+    r'|[\u2300-\u23FF]'
+    r'|[\u2B50\u2B55\u203C\u2049\u2122\u2139\u2194-\u2199\u21A9-\u21AA\u2934\u2935\u2B05-\u2B07\u2B1B\u2B1C\u3030\u303D\u3297\u3299]'
+    r'|[\uFE00-\uFE0F]'
+    r'|[\u200D]'
+)
+UNICODE_OR_EMOJI_REGEX = re.compile(rf'(?:{UNICODE_ESCAPE_PATTERN}|(?:{EMOJI_PATTERN})+)')
 
 def print_banner():
     if USE_RICH:
@@ -97,14 +127,84 @@ def print_extraction_summary(result: ExtractionResult, default_count: int = 0):
         print(f"  {G}{BOLD}{default_count + result.total_mobile_count}{W} TOTAL SMS Target(s)")
         print(f"{C}{BOLD}----------------------------{W}\n")
 
+def detect_unicode_or_emoji_in_message(payload_json: str) -> Tuple[bool, List[str]]:
+    """
+    Detects Unicode escape sequences (e.g. \\u26a0, \\ud83d\\ude0a) or literal emojis
+    in the message portion of the payload (or within payload string).
+    Returns (has_detection, list_of_detected_items).
+    """
+    matches = []
+    try:
+        data = json.loads(payload_json)
+        if isinstance(data, dict) and "message" in data:
+            msg_str = str(data["message"])
+            msg_dumped = json.dumps(msg_str)
+            matches.extend(UNICODE_OR_EMOJI_REGEX.findall(msg_dumped))
+            matches.extend(UNICODE_OR_EMOJI_REGEX.findall(msg_str))
+    except Exception:
+        pass
+
+    matches.extend(UNICODE_OR_EMOJI_REGEX.findall(payload_json))
+    unique_items = list(dict.fromkeys(matches))
+    return (len(unique_items) > 0, unique_items)
+
+def highlight_payload_rich(payload_json: str) -> "Text":
+    """
+    Formats the payload JSON for Rich console with detected Unicode escape sequences
+    and emojis highlighted in bold orange.
+    """
+    t = Text()
+    last = 0
+    for m in UNICODE_OR_EMOJI_REGEX.finditer(payload_json):
+        t.append(payload_json[last:m.start()], style="cyan")
+        t.append(m.group(0), style="bold orange1")
+        last = m.end()
+    t.append(payload_json[last:], style="cyan")
+    return t
+
+def highlight_payload_ansi(payload_json: str) -> str:
+    """
+    Formats the payload JSON for ANSI terminal with detected Unicode escape sequences
+    and emojis colored in orange.
+    """
+    colored = UNICODE_OR_EMOJI_REGEX.sub(lambda m: f"{ORANGE}{BOLD}{m.group(0)}{W}{C}", payload_json)
+    return f"{C}{colored}{W}"
+
 def print_payload_preview(payload_json: str, headers: Dict[str, str]):
+    has_unicode, detected_items = detect_unicode_or_emoji_in_message(payload_json)
+
     if USE_RICH:
-        console.print(Panel(payload_json, title="[bold green]Payload Preview[/bold green]", border_style="green", expand=False))
+        if has_unicode:
+            panel_content = highlight_payload_rich(payload_json)
+            console.print(Panel(
+                panel_content,
+                title="[bold orange1]Payload Preview [!] (Unicode / Emoji Detected)[/bold orange1]",
+                border_style="orange1",
+                expand=False
+            ))
+            detected_display = ", ".join(repr(x)[1:-1] for x in detected_items[:8])
+            if len(detected_items) > 8:
+                detected_display += f" ... (+{len(detected_items) - 8} more)"
+            console.print(f"[bold orange1]  [!] NOTICE: Unicode escape sequence or emoji detected in payload message![/bold orange1]")
+            console.print(f"[orange3]      Detected: {detected_display}[/orange3]")
+        else:
+            console.print(Panel(payload_json, title="[bold green]Payload Preview[/bold green]", border_style="green", expand=False))
+
         header_str = "\n".join([f"[yellow]{k}[/yellow]: [cyan]{v}[/cyan]" for k, v in headers.items()])
         console.print(Panel(header_str, title="[bold green]Headers Preview[/bold green]", border_style="green", expand=False))
     else:
-        print(f"{G}{BOLD}[~] Please check this PAYLOAD:{W}")
-        print(f"{C}{payload_json}{W}")
+        if has_unicode:
+            print(f"{ORANGE}{BOLD}[~] Please check this PAYLOAD (WARNING: Unicode / Emoji Detected):{W}")
+            print(highlight_payload_ansi(payload_json))
+            detected_display = ", ".join(repr(x)[1:-1] for x in detected_items[:8])
+            if len(detected_items) > 8:
+                detected_display += f" ... (+{len(detected_items) - 8} more)"
+            print(f"{ORANGE}{BOLD}  [!] WARNING: Unicode escape sequence or emoji detected in payload message!{W}")
+            print(f"{ORANGE}      Detected: {detected_display}{W}")
+        else:
+            print(f"{G}{BOLD}[~] Please check this PAYLOAD:{W}")
+            print(f"{C}{payload_json}{W}")
+
         print(f"{G}{BOLD}[~] Please check this HEADERS:{W}")
         for k, v in headers.items():
             print(f"  {Y}{k}{W}: {C}{v}{W}")
